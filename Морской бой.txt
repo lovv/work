@@ -1,0 +1,342 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <conio.h>
+
+
+/*
+  ABCDIFGHIJ         ABCDIFGHIJ
+ *----------*        *----------*
+0|          |       0|          |
+1|          |       1|          |
+2|          |       2|          |
+3|          |       3|          |
+4|          |       4|          |
+5|          |       5|          |
+6|          |       6|          |
+7|          |       7|          |
+8|          |       8|          |
+9|          |       9|          |
+ *----------*        *----------*
+
+*/
+typedef enum //Объявдяем новый тип переменных
+{
+    INIT = 0  //ввод данных
+    ,DRAW       // будем отрисовывать
+    ,PROCESSING
+    ,EXIT
+
+}eGameState; //Это название этого типа - Сосотяние игры
+
+typedef enum
+{
+    EMPTY = 0 //Первое перечисление (КОНСТАНТА) всегда =0. Нижние перечисления =+1
+   ,SHOT
+   ,STRIKE
+   ,KILL
+   ,SHIP
+   ,EFIELD_INFO_END //Эта константа нам будет говорить сколько переменных внутри
+                    //у нас
+}efieldinfo; //Ото навание типа - информация о поле
+
+#define N_LINES    13
+#define FIELD_SIZE 10
+#define PLAYER_1   0
+#define PLAYER_2   ~PLAYER_1
+
+#define KEY_ENTER          13
+#define KEY_UP             72
+#define KEY_RIGHT          77
+#define KEY_DOWN           80
+#define KEY_LEFT           75
+#define ARROW_KEY_PRESSED  0xE0
+#define TARGET             '+' //Это наш прицел
+
+
+char *FIELD[] ={
+
+ "  ABCDIFGHIJ          ABCDIFGHIJ  "
+," *----------*        *----------*"
+,"0|          |       0|          |"
+,"1|          |       1|          |"
+,"2|          |       2|          |"
+,"3|          |       3|          |"
+,"4|          |       4|          |"
+,"5|          |       5|          |"
+,"6|          |       6|          |"
+,"7|          |       7|          |"
+,"8|          |       8|          |"
+,"9|          |       9|          |"
+," *----------*        *----------*"
+};
+
+char draw_simbol[EFIELD_INFO_END] = //Этот массив перед кампиляцией
+                                    //автоматически изменяет свой размер
+ {
+
+    ' '  //EMPTY
+    ,'*'  //SHOT
+    ,'X'  //STRIKE
+    ,'#'  //KILL
+    ,'1'  //SHIP
+};
+
+void draw_field(efieldinfo *, unsigned short a_target); //Объявляю функцию, которая будет рисовать поле field.
+                  // В нее буду передавать указатель *FIELD
+
+void ship_generate(efieldinfo *); //объявляю ф-цию для расстановки кораблей
+
+/*Объявляю ф-цию, которая будет читать данные с клавиатуры
+и возвращать координаты нашего прицела */
+unsigned char get_target_position(unsigned  char *, unsigned char *);
+//-------------------------------------------------------------------------------------------
+int main(){
+
+//();
+//printf("%c\n", draw_simbol[KILL]);
+//printf("%c\n", draw_simbol[SHIP]);
+
+eGameState game_state = INIT;
+unsigned char isRan = 1; /*Сделал флаг, который буду крутить в цикле while
+Когда мы примем решение, что игра закончена , мы этот флаг переключим на 0 и
+цикл while заверщится*/
+int player = PLAYER_1;
+
+efieldinfo p1_data [FIELD_SIZE * FIELD_SIZE] = {EMPTY}; //массив для первого игрока 1-е поле
+efieldinfo p2_data [FIELD_SIZE * FIELD_SIZE] = {EMPTY}; //массив для второго игрока 1-е поле
+efieldinfo p11_data [FIELD_SIZE * FIELD_SIZE] = {EMPTY}; //массив для первого игрока 2-е поле
+efieldinfo p22_data [FIELD_SIZE * FIELD_SIZE] = {EMPTY}; //массив для второго игрока 2-е поле
+
+efieldinfo *tmp; /*Я ввожу указатель на ячейку памяти, где будет хранится информация
+                 о переключении игроков (тернарный оператор)*/
+
+
+
+unsigned char target_x = 0;
+unsigned char target_y = 0;
+unsigned short shot_position = 0; /* В этой переменной 2 байта. Один байт будет
+                                    содержать координату x, а другой  - y для прицела
+                                    TARGET*/
+
+
+
+while(isRan)
+{
+    switch(game_state)
+   {
+    case INIT:
+       {    //вводим игровые данные
+           ship_generate(p1_data); //генерируем данные для 1 игрока (расстановка кораблей)
+           ship_generate(p2_data); //генерируем данные для 2 игрока (расстановка кораблей)
+
+           p1_data[0 * 10 + 4] = KILL;
+           p1_data[9 * 10 + 8] = KILL;
+
+           game_state = DRAW; //переключаемся в отрисовку
+           break;
+       }
+    case DRAW:
+        {   //отрисовка
+            system("cls");//эта команда очищает экран
+
+            // смотрим какой текущий игрок
+           tmp = (player == PLAYER_1) ? p1_data : p2_data; /*Если PLAYER_1 = player,
+            то *tmp = p1_data, иначе = p2_data*/
+
+            //передали этого игрока в функцию отрисовки поля
+            draw_field(tmp, shot_position);
+
+            if (get_target_position(&target_x, &target_y))
+            {
+                game_state = PROCESSING; /*если были введены данные x, y и нажата ENTER,
+                мы переходим в следующFIELD_SIZE * FIELD_SIZEий case. Если введены х и у, но не нажата ENTER,
+                мы остаемся в этом режиме*/
+            }
+            /* Зашивать наши координаты будем так: */
+            shot_position = (target_y << 8) | (target_x);
+
+            /*getch();/*когда выполнение программы доходит до этого
+            участка, программа останавливается и ждет ввода с клавиатуры*/
+
+            //game_state = PROCESSING; //переключаемся в режим ввода данных
+            break;
+        }
+    case PROCESSING:
+        {   //обрабатываем данные
+           player = ~player;
+            game_state = DRAW; //переключаемся снова в режим отрисовки
+            break;
+        }
+    case EXIT:
+    {
+        break;
+    }
+  }
+}
+
+
+
+   return 0;
+}
+//-------------------------------------------------------------------------------------------
+
+void draw_field(efieldinfo *ap_data, unsigned short a_target)
+/*1.Определяю функцию, которая будет  рисовать поле field. В нее буду
+ передавать указатель *FIELD. 2. Мы передали в функцию 2-м параметром
+ координаты нашего прицела*/
+
+{
+    printf("%s\n", FIELD[0]);
+    printf("%s\n", FIELD[1]);
+
+    unsigned char target_x = 0;
+    unsigned char target_y = 0;
+
+/*Здесь мы описываем координаты нашего прицела*/
+    target_x = a_target;/* Здесь 2-й байт обрежется. Мы получим только значение
+    первого байта*/
+    target_y = a_target >> 8; //сдвинули значение на 8 знаков
+
+    for (int i=0; i<10; i++) // Меньше 10, потому, что первые 2 строки мы уже вывели,
+
+    {
+        printf("%c%c", FIELD[i+2][0], FIELD[i+2][1]); //Вывели 3-ю строку
+
+        for (int j = 0; j < FIELD_SIZE; j++)//печатаем поле 1
+            //printf(" ");//сделали заглушку, вывели поле 1 //Отображаем информацию о кораблях
+        {
+        /*вместо применения switch для массива ap_data[i * FIELD_SIZE + j]
+        делаем массив в массиве, для массива  draw_simbol получаем по индексу
+        нужный нам символ, т.к значения совпадают.
+        */
+         draw_simbol [ ap_data[i * FIELD_SIZE + j]];
+         printf("%c",draw_simbol [ ap_data[i * FIELD_SIZE + j]] );
+        }
+
+        for (int j = 12; j < 22; j++)
+            printf("%c", FIELD[i+2][j]);//печатаем между полями
+
+
+        for (int j = 0; j < FIELD_SIZE; j++)//печатаем поле 2
+        {
+
+            //printf(" ");/*сделали заглушку, вывели поле 2 Отвечает за отрисовку куда мы стреляем,
+                        //попали, или не попали*/
+
+            if (i == target_y && j == target_x)
+                    printf("%c", TARGET);
+               else
+                {
+                    printf(" ");
+                       /*if (draw_simbol == SHIP)
+                       printf("%c", draw_simbol[KILL]);*/
+
+                }
+
+        }
+        //for (int i=0; i<N_LINES; i++)
+        //printf("%s\n", FIELD[i]);
+        printf("%c\n", FIELD[i+2][32]);
+
+    }
+    printf("%s\n", FIELD[N_LINES - 1]);
+
+}
+//-------------------------------------------------------------------------------------------
+
+void ship_generate(efieldinfo *ap_data) //определяю ф-цию для расстановки кораблей
+{
+
+/*
+  0123456789         ABCDIFGHIJ
+ *----------*        *----------*
+0|&   &  &  |       0|          |
+1|   & &    |       1|          |
+2|   & &   &|       2|          |
+3|   &     &|       3|          |
+4|      &   |       4|          |
+5|&         |       5|          |
+6|%         |       6|          |
+7|&   &&&&  |       7|          |
+8|&         |       8|          |
+9|   &&  && |       9|          |
+ *----------*        *----------*
+*/
+// i*n + j, где i-номер линии, j-номер столбца, n-ширина массива
+
+
+ap_data[0 * 10 + 0] = SHIP;
+ap_data[0 * 10 + 4] = SHIP;
+ap_data[0 * 10 + 7] = SHIP;
+ap_data[1 * 10 + 3] = SHIP;
+ap_data[1 * 10 + 5] = SHIP;
+ap_data[2 * 10 + 3] = SHIP;
+ap_data[2 * 10 + 5] = SHIP;
+ap_data[2 * 10 + 9] = SHIP;
+ap_data[3 * 10 + 3] = SHIP;
+ap_data[3 * 10 + 9] = SHIP;
+ap_data[4 * 10 + 6] = SHIP;
+ap_data[5 * 10 + 0] = SHIP;
+ap_data[6 * 10 + 0] = SHIP;
+ap_data[7 * 10 + 0] = SHIP;
+ap_data[7 * 10 + 4] = SHIP;
+ap_data[7 * 10 + 5] = SHIP;
+ap_data[7 * 10 + 6] = SHIP;
+ap_data[7 * 10 + 7] = SHIP;
+ap_data[8 * 10 + 0] = SHIP;
+ap_data[9 * 10 + 3] = SHIP;
+ap_data[9 * 10 + 4] = SHIP;
+ap_data[9 * 10 + 7] = SHIP;
+ap_data[9 * 10 + 8] = SHIP;
+
+}
+
+//-------------------------------------------------------------------------------------------
+
+unsigned char get_target_position(unsigned  char *ap_x, unsigned char *ap_y)
+{
+   int key = 0; /*Объявляю переменную, которая будет содержать код
+   нажатой клавиши*/
+
+   key = getch(); /*При вызове ф-ции unsigned char get_target_position
+   программа здесь останнавливается*/
+
+   switch (key)
+   {
+   case ARROW_KEY_PRESSED:
+    {
+        switch (getch())
+        {
+            case KEY_DOWN:
+                {
+                    if (*ap_y < FIELD_SIZE - 1)
+                        (*ap_y)++;
+                     return 0;
+                }
+            case KEY_UP:
+                {   if (*ap_y > 0)
+                        (*ap_y)--;
+                    return 0;
+                }
+            case KEY_LEFT:
+                {  if (*ap_x > 0)
+                        (*ap_x)--;
+                     return 0;
+                }
+            case KEY_RIGHT:
+                {    if (*ap_x < FIELD_SIZE - 1)
+                        (*ap_x)++;
+                    return 0;
+                }
+
+            }
+        }
+            case KEY_ENTER:
+                {
+                 return 1;
+                }
+                 return 0;
+            }
+
+        }
+
